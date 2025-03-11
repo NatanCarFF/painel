@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    /* Reset e estilo base */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background: radial-gradient(circle, #0d0d0d, #030303);
+      font-family: 'Courier New', Courier, monospace;
+      color: #e0e0e0;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 20px auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+    /* Canvas de tráfego de rede */
+    #networkCanvas {
+      background-color: #000;
+      border: 2px solid #333;
+      border-radius: 10px;
+      width: 100%;
+      max-width: 800px;
+      height: 300px;
+      display: block;
+      position: relative;
+    }
+    /* Medidor de ameaça */
+    .meter {
+      width: 100%;
+      max-width: 800px;
+      height: 30px;
+      background-color: #333;
+      border-radius: 5px;
+      overflow: hidden;
+      border: 1px solid #555;
+    }
+    .meter-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #00ff00, #ff0000);
+      transition: width 0.5s ease;
+    }
+    /* Gráfico de ameaça */
+    #threatChartCanvas {
+      background-color: #111;
+      border: 1px solid #444;
+      border-radius: 5px;
+      width: 100%;
+      max-width: 800px;
+      height: 100px;
+      display: block;
+    }
+    /* Console de logs */
+    .log-panel {
+      background-color: #111;
+      border: 1px solid #333;
+      border-radius: 5px;
+      width: 100%;
+      max-width: 800px;
+      height: 200px;
+      overflow-y: auto;
+      padding: 10px;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .log-message {
+      margin: 3px 0;
+    }
+    /* Caixa de entrada de comando */
+    .command-input {
+      width: 100%;
+      max-width: 800px;
+      padding: 10px;
+      background-color: #222;
+      color: #fff;
+      border: 1px solid #555;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+    /* Escudo de Defesa */
+    #shieldOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 128, 0, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+      font-weight: bold;
+      color: #00ff00;
+      opacity: 0;
+      pointer-events: none;
+    }
+    @keyframes pulseShield {
+      0% { opacity: 0; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.1); }
+      100% { opacity: 0; transform: scale(0.8); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Canvas que simula o tráfego de rede -->
+    <canvas id="networkCanvas"></canvas>
+    <!-- Medidor de ameaça -->
+    <div class="meter">
+      <div class="meter-fill" id="threatMeter"></div>
+    </div>
+    <!-- Gráfico do histórico de ameaça -->
+    <canvas id="threatChartCanvas"></canvas>
+    <!-- Console de logs -->
+    <div class="log-panel" id="logPanel"></div>
+    <!-- Caixa de entrada de comando -->
+    <input type="text" id="commandInput" class="command-input" placeholder="Digite um comando...">
+  </div>
+  <!-- Escudo animado para defesa -->
+  <div id="shieldOverlay">DEFESA ATIVADA!</div>
+
+  <script>
+    // ======= Configurações Gerais =======
+    const canvas = document.getElementById('networkCanvas');
+    const ctx = canvas.getContext('2d');
+    let width = canvas.width = canvas.offsetWidth;
+    let height = canvas.height = canvas.offsetHeight;
+    
+    const chartCanvas = document.getElementById('threatChartCanvas');
+    const chartCtx = chartCanvas.getContext('2d');
+    let chartWidth = chartCanvas.width = chartCanvas.offsetWidth;
+    let chartHeight = chartCanvas.height = chartCanvas.offsetHeight;
+    
+    const logPanel = document.getElementById('logPanel');
+    const threatMeter = document.getElementById('threatMeter');
+    const shieldOverlay = document.getElementById('shieldOverlay');
+    const commandInput = document.getElementById('commandInput');
+    
+    let particles = [];
+    const numParticles = 120;
+    let attackActive = true;
+    let threatLevel = 0; // Nível de ameaça (0 a 100)
+    let threatHistory = []; // Histórico para o gráfico
+    
+    let logInterval, chartInterval;
+    let ipFrequencia = {}; // Contabiliza ocorrências de IPs
+    
+    // ======= Funções de Partículas =======
+    function criarParticula() {
+      return {
+        x: Math.random() * width,
+        y: Math.random() * height,
+        speed: 0.5 + Math.random() * 2,
+        direction: Math.random() * 2 * Math.PI,
+        attack: Math.random() < 0.15, // 15% de chance de ser malicioso
+        size: 2 + Math.random() * 2 // Tamanho entre 2 e 4
+      };
+    }
+    
+    function inicializarParticulas() {
+      particles = [];
+      for (let i = 0; i < numParticles; i++) {
+        particles.push(criarParticula());
+      }
+    }
+    
+    function updateCanvas() {
+      ctx.clearRect(0, 0, width, height);
+      particles.forEach(p => {
+        p.x += Math.cos(p.direction) * p.speed;
+        p.y += Math.sin(p.direction) * p.speed;
+        
+        // Se sair do canvas, reposiciona
+        if (p.x < 0 || p.x > width || p.y < 0 || p.y > height) {
+          p.x = Math.random() * width;
+          p.y = Math.random() * height;
+          p.direction = Math.random() * 2 * Math.PI;
+        }
+        
+        // Define a cor: se ativo e malicioso, vermelho; caso contrário, verde
+        let cor = '#00ff00';
+        if (attackActive && p.attack) {
+          cor = '#ff3333';
+          threatLevel += 0.05; // aumenta o nível de ameaça
+        }
+        if (!attackActive) {
+          cor = '#00ff00';
+        }
+        
+        ctx.fillStyle = cor;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      
+      // Atualiza o medidor
+      threatLevel = Math.min(threatLevel, 100);
+      threatMeter.style.width = threatLevel + '%';
+      // Decaimento natural do nível de ameaça
+      threatLevel *= 0.995;
+      
+      requestAnimationFrame(updateCanvas);
+    }
+    
+    // ======= Funções do Gráfico de Ameaça =======
+    function atualizarHistorico() {
+      // Registra o nível atual a cada 500ms
+      threatHistory.push(threatLevel);
+      if (threatHistory.length > 50) { // limita a 50 registros
+        threatHistory.shift();
+      }
+      desenharGrafico();
+    }
+    
+    function desenharGrafico() {
+      chartCtx.clearRect(0, 0, chartWidth, chartHeight);
+      chartCtx.beginPath();
+      chartCtx.strokeStyle = '#00ff00';
+      const step = chartWidth / (threatHistory.length - 1);
+      threatHistory.forEach((nivel, index) => {
+        const x = index * step;
+        const y = chartHeight - (nivel / 100 * chartHeight);
+        if (index === 0) {
+          chartCtx.moveTo(x, y);
+        } else {
+          chartCtx.lineTo(x, y);
+        }
+      });
+      chartCtx.stroke();
+    }
+    
+    // ======= Funções de Logs =======
+    function gerarIP() {
+      return Array(4).fill(0).map(() => Math.floor(Math.random() * 256)).join('.');
+    }
+    
+    function getTimestamp() {
+      return new Date().toLocaleTimeString();
+    }
+    
+    function addLog(message, type = 'INFO') {
+      const logEntry = document.createElement('div');
+      logEntry.classList.add('log-message');
+      logEntry.style.color = (type === 'ALERT') ? '#ff5555' : '#a8a8a8';
+      logEntry.innerText = `[${getTimestamp()}] [${type}] ${message}`;
+      logPanel.appendChild(logEntry);
+      logPanel.scrollTop = logPanel.scrollHeight;
+    }
+    
+    function iniciarLogs() {
+      logInterval = setInterval(() => {
+        const ip = gerarIP();
+        // Atualiza a frequência de IP
+        ipFrequencia[ip] = (ipFrequencia[ip] || 0) + 1;
+        
+        const messages = [
+          `Conexão estabelecida com ${ip}.`,
+          `Verificação de firewall para ${ip}.`,
+          `Tentativa de acesso não autorizado de ${ip}.`,
+          `Atividade suspeita detectada de ${ip}.`,
+          `Varredura de rede iniciada por ${ip}.`,
+          `Múltiplas requisições anômalas de ${ip}.`
+        ];
+        const randomMsg = messages[Math.floor(Math.random() * messages.length)];
+        
+        // Se o mesmo IP aparecer muitas vezes, simula bloqueio
+        if (ipFrequencia[ip] > 3 && (randomMsg.includes('não autorizado') || randomMsg.includes('suspeita') || randomMsg.includes('anômalas'))) {
+          addLog(`IP ${ip} BANIDO por comportamento suspeito.`, 'ALERT');
+          ipFrequencia[ip] = 0;
+        } else {
+          if (randomMsg.includes('não autorizado') || randomMsg.includes('suspeita') || randomMsg.includes('anômalas')) {
+            addLog(randomMsg, 'ALERT');
+          } else {
+            addLog(randomMsg, 'INFO');
+          }
+        }
+      }, 800);
+    }
+    
+    // ======= Função de Defesa (Escudo Pulsante) =======
+    function ativarDefesa() {
+      clearInterval(logInterval);
+      attackActive = false;
+      addLog('Defesa ativada: pacotes maliciosos neutralizados e tráfego estabilizado.', 'INFO');
+      
+      // Efeito visual do escudo
+      shieldOverlay.style.animation = 'pulseShield 1.5s ease-out';
+      shieldOverlay.style.opacity = 1;
+      setTimeout(() => {
+        shieldOverlay.style.opacity = 0;
+      }, 1500);
+      
+      // Neutraliza partículas maliciosas
+      particles.forEach(p => {
+        if (p.attack) p.attack = false;
+      });
+      
+      // Reseta gradualmente o medidor de ameaça
+      const resetThreat = setInterval(() => {
+        threatLevel *= 0.95;
+        if (threatLevel < 1) {
+          threatLevel = 0;
+          clearInterval(resetThreat);
+        }
+      }, 500);
+      
+      // Efeito de fundo no log
+      logPanel.style.transition = 'background-color 0.5s';
+      logPanel.style.backgroundColor = '#003300';
+      setTimeout(() => {
+        logPanel.style.backgroundColor = '#111';
+      }, 600);
+      
+      // Resetar simulação após intervalo aleatório entre 30 e 60 segundos
+      const intervaloReset = Math.floor(Math.random() * 30000) + 30000; // entre 30 e 60 segundos
+      setTimeout(resetarSimulacao, intervaloReset);
+    }
+    
+    // ======= Função de Reset da Simulação =======
+    function resetarSimulacao() {
+      clearInterval(logInterval);
+      threatLevel = 0;
+      threatHistory = [];
+      ipFrequencia = {};
+      
+      // Não adiciona log de reinicialização da simulação
+      attackActive = true;
+      inicializarParticulas();
+      iniciarLogs();
+    }
+    
+    // ======= Inicialização e Atualizações =======
+    inicializarParticulas();
+    updateCanvas();
+    iniciarLogs();
+    chartInterval = setInterval(atualizarHistorico, 500);
+    
+    // Ajusta o canvas e o gráfico ao redimensionar a janela
+    window.addEventListener('resize', () => {
+      width = canvas.width = canvas.offsetWidth;
+      height = canvas.height = canvas.offsetHeight;
+      chartWidth = chartCanvas.width = chartCanvas.offsetWidth;
+      chartHeight = chartCanvas.height = chartCanvas.offsetHeight;
+    });
+    
+    // ======= Evento para a entrada do comando =======
+    commandInput.addEventListener('keypress', function(event) {
+      if (event.key === 'Enter') {
+        const command = commandInput.value.trim().toLowerCase();
+        if (command === 'ativar defesa') {
+          ativarDefesa();
+        } else {
+          addLog(`Comando desconhecido: ${command}`, 'ALERT');
+        }
+        commandInput.value = '';
+      }
+    });
+  </script>
+</body>
+</html>
