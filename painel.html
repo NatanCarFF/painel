@@ -1,70 +1,76 @@
 <!DOCTYPE html>
-<html lang="pt">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Network Threat Simulation</title>
   <style>
-    /* Reset e estilo base */
+    /* Reset and base styles */
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
     body {
-      background: radial-gradient(circle, #0d0d0d, #030303);
+      background: linear-gradient(135deg, #0d0d0d, #101010);
       font-family: 'Courier New', Courier, monospace;
       color: #e0e0e0;
+      padding: 20px;
     }
     .container {
       max-width: 1000px;
-      margin: 20px auto;
+      margin: 0 auto;
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 20px;
+      padding: 20px;
     }
-    /* Canvas de tráfego de rede */
+    /* Network traffic canvas */
     #networkCanvas {
-      background-color: #000;
-      border: 2px solid #333;
+      background-color: #151515;
+      border: 1px solid #333;
       border-radius: 10px;
       width: 100%;
       max-width: 800px;
       height: 300px;
       display: block;
-      position: relative;
+      box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);
     }
-    /* Medidor de ameaça */
+    /* Threat meter */
     .meter {
       width: 100%;
       max-width: 800px;
       height: 30px;
-      background-color: #333;
-      border-radius: 5px;
+      background-color: #222;
+      border: 1px solid #444;
+      border-radius: 10px;
       overflow: hidden;
-      border: 1px solid #555;
     }
     .meter-fill {
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, #00ff00, #ff0000);
-      transition: width 0.5s ease;
+      background: linear-gradient(90deg, #4caf50, #f44336);
+      border-radius: 10px;
+      transition: width 0.5s ease, background 0.5s ease;
+      box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
     }
-    /* Gráfico de ameaça */
+    /* Threat chart */
     #threatChartCanvas {
-      background-color: #111;
-      border: 1px solid #444;
-      border-radius: 5px;
+      background-color: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 10px;
       width: 100%;
       max-width: 800px;
       height: 100px;
       display: block;
+      box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
     }
-    /* Console de logs */
+    /* Log console */
     .log-panel {
-      background-color: #111;
+      background-color: #1a1a1a;
       border: 1px solid #333;
-      border-radius: 5px;
+      border-radius: 10px;
       width: 100%;
       max-width: 800px;
       height: 200px;
@@ -72,29 +78,31 @@
       padding: 10px;
       font-size: 13px;
       line-height: 1.4;
+      box-shadow: 0 0 10px rgba(0, 255, 0, 0.2);
     }
     .log-message {
       margin: 3px 0;
     }
-    /* Caixa de entrada de comando */
+    /* Command input box */
     .command-input {
       width: 100%;
       max-width: 800px;
       padding: 10px;
-      background-color: #222;
-      color: #fff;
-      border: 1px solid #555;
-      border-radius: 5px;
+      background-color: #2a2a2a;
+      color: #e0e0e0;
+      border: 1px solid #444;
+      border-radius: 10px;
       font-size: 16px;
+      box-shadow: 0 0 5px rgba(0, 255, 0, 0.2);
     }
-    /* Escudo de Defesa */
+    /* Defense shield overlay */
     #shieldOverlay {
       position: fixed;
       top: 0;
       left: 0;
       width: 100vw;
       height: 100vh;
-      background: rgba(0, 128, 0, 0.3);
+      background: rgba(0, 128, 0, 0.2);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -113,24 +121,24 @@
 </head>
 <body>
   <div class="container">
-    <!-- Canvas que simula o tráfego de rede -->
+    <!-- Network traffic canvas -->
     <canvas id="networkCanvas"></canvas>
-    <!-- Medidor de ameaça -->
+    <!-- Threat meter -->
     <div class="meter">
       <div class="meter-fill" id="threatMeter"></div>
     </div>
-    <!-- Gráfico do histórico de ameaça -->
+    <!-- Threat history chart -->
     <canvas id="threatChartCanvas"></canvas>
-    <!-- Console de logs -->
+    <!-- Log console -->
     <div class="log-panel" id="logPanel"></div>
-    <!-- Caixa de entrada de comando -->
-    <input type="text" id="commandInput" class="command-input" placeholder="Digite um comando...">
+    <!-- Command input box -->
+    <input type="text" id="commandInput" class="command-input" placeholder="Enter a command...">
   </div>
-  <!-- Escudo animado para defesa -->
-  <div id="shieldOverlay">DEFESA ATIVADA!</div>
+  <!-- Animated defense shield -->
+  <div id="shieldOverlay">DEFENSE ACTIVATED!</div>
 
   <script>
-    // ======= Configurações Gerais =======
+    // ======= General Settings =======
     const canvas = document.getElementById('networkCanvas');
     const ctx = canvas.getContext('2d');
     let width = canvas.width = canvas.offsetWidth;
@@ -149,28 +157,31 @@
     let particles = [];
     const numParticles = 120;
     let attackActive = true;
-    let threatLevel = 0; // Nível de ameaça (0 a 100)
-    let threatHistory = []; // Histórico para o gráfico
+    let threatLevel = 0; // Used for the meter
+    let threatHistory = []; // History for the chart
     
-    let logInterval, chartInterval;
-    let ipFrequencia = {}; // Contabiliza ocorrências de IPs
+    let logTimeout, chartInterval;
+    let ipFrequency = {}; // Count occurrences of IPs
     
-    // ======= Funções de Partículas =======
-    function criarParticula() {
+    // New variable for graph that spikes on alerts
+    let alertGraph = 0;
+    
+    // ======= Particle Functions =======
+    function createParticle() {
       return {
         x: Math.random() * width,
         y: Math.random() * height,
         speed: 0.5 + Math.random() * 2,
         direction: Math.random() * 2 * Math.PI,
-        attack: Math.random() < 0.15, // 15% de chance de ser malicioso
-        size: 2 + Math.random() * 2 // Tamanho entre 2 e 4
+        attack: Math.random() < 0.15, // 15% chance to be malicious
+        size: 2 + Math.random() * 2 // Size between 2 and 4
       };
     }
     
-    function inicializarParticulas() {
+    function initParticles() {
       particles = [];
       for (let i = 0; i < numParticles; i++) {
-        particles.push(criarParticula());
+        particles.push(createParticle());
       }
     }
     
@@ -180,67 +191,103 @@
         p.x += Math.cos(p.direction) * p.speed;
         p.y += Math.sin(p.direction) * p.speed;
         
-        // Se sair do canvas, reposiciona
+        // Reposition if out of canvas
         if (p.x < 0 || p.x > width || p.y < 0 || p.y > height) {
           p.x = Math.random() * width;
           p.y = Math.random() * height;
           p.direction = Math.random() * 2 * Math.PI;
         }
         
-        // Define a cor: se ativo e malicioso, vermelho; caso contrário, verde
-        let cor = '#00ff00';
+        // Set color: red if attack active and malicious, otherwise green
+        let color = '#00ff00';
         if (attackActive && p.attack) {
-          cor = '#ff3333';
-          threatLevel += 0.05; // aumenta o nível de ameaça
+          color = '#ff3333';
+          threatLevel += 0.05; // Increase meter value
         }
         if (!attackActive) {
-          cor = '#00ff00';
+          color = '#00ff00';
         }
         
-        ctx.fillStyle = cor;
+        ctx.fillStyle = color;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
       });
       
-      // Atualiza o medidor
+      // Update the threat meter
       threatLevel = Math.min(threatLevel, 100);
       threatMeter.style.width = threatLevel + '%';
-      // Decaimento natural do nível de ameaça
+      // Natural decay of meter value
       threatLevel *= 0.995;
       
       requestAnimationFrame(updateCanvas);
     }
     
-    // ======= Funções do Gráfico de Ameaça =======
-    function atualizarHistorico() {
-      // Registra o nível atual a cada 500ms
-      threatHistory.push(threatLevel);
-      if (threatHistory.length > 50) { // limita a 50 registros
+    // ======= Threat Chart Functions =======
+    function updateHistory() {
+      // Use alertGraph which spikes only on alerts
+      threatHistory.push(alertGraph);
+      if (threatHistory.length > 50) { // Limit to 50 records
         threatHistory.shift();
       }
-      desenharGrafico();
+      drawChart();
+      // Gradually decay the alertGraph value
+      alertGraph *= 0.90;
     }
     
-    function desenharGrafico() {
+    function drawChart() {
       chartCtx.clearRect(0, 0, chartWidth, chartHeight);
+      
+      // Draw grid background for reference
+      const gridColor = "#333";
+      const gridSpacingX = chartWidth / 10;
+      const gridSpacingY = chartHeight / 5;
+      chartCtx.strokeStyle = gridColor;
+      chartCtx.lineWidth = 0.5;
+      for (let x = 0; x <= chartWidth; x += gridSpacingX) {
+        chartCtx.beginPath();
+        chartCtx.moveTo(x, 0);
+        chartCtx.lineTo(x, chartHeight);
+        chartCtx.stroke();
+      }
+      for (let y = 0; y <= chartHeight; y += gridSpacingY) {
+        chartCtx.beginPath();
+        chartCtx.moveTo(0, y);
+        chartCtx.lineTo(chartWidth, y);
+        chartCtx.stroke();
+      }
+      
+      // Prepare points from threatHistory
+      const points = threatHistory.map((value, index) => ({
+        x: index * (chartWidth / (threatHistory.length - 1)),
+        y: chartHeight - (value / 100 * chartHeight)
+      }));
+      
+      // Draw the graph as a step-like line
       chartCtx.beginPath();
-      chartCtx.strokeStyle = '#00ff00';
-      const step = chartWidth / (threatHistory.length - 1);
-      threatHistory.forEach((nivel, index) => {
-        const x = index * step;
-        const y = chartHeight - (nivel / 100 * chartHeight);
-        if (index === 0) {
-          chartCtx.moveTo(x, y);
-        } else {
-          chartCtx.lineTo(x, y);
+      if (points.length) {
+        chartCtx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+          chartCtx.lineTo(points[i].x, points[i].y);
         }
-      });
+      }
+      chartCtx.lineWidth = 2;
+      chartCtx.strokeStyle = "#ffcc00";
       chartCtx.stroke();
+      
+      // Fill area under the graph with a gradient
+      chartCtx.lineTo(chartWidth, chartHeight);
+      chartCtx.lineTo(0, chartHeight);
+      chartCtx.closePath();
+      const gradient = chartCtx.createLinearGradient(0, 0, 0, chartHeight);
+      gradient.addColorStop(0, "rgba(255,204,0,0.4)");
+      gradient.addColorStop(1, "rgba(255,0,0,0.2)");
+      chartCtx.fillStyle = gradient;
+      chartCtx.fill();
     }
     
-    // ======= Funções de Logs =======
-    function gerarIP() {
+    // ======= Log Functions =======
+    function generateIP() {
       return Array(4).fill(0).map(() => Math.floor(Math.random() * 256)).join('.');
     }
     
@@ -255,57 +302,78 @@
       logEntry.innerText = `[${getTimestamp()}] [${type}] ${message}`;
       logPanel.appendChild(logEntry);
       logPanel.scrollTop = logPanel.scrollHeight;
+      // On alert, set the graph value to spike
+      if (type === 'ALERT') {
+        alertGraph = 100;
+      }
     }
     
-    function iniciarLogs() {
-      logInterval = setInterval(() => {
-        const ip = gerarIP();
-        // Atualiza a frequência de IP
-        ipFrequencia[ip] = (ipFrequencia[ip] || 0) + 1;
-        
-        const messages = [
-          `Conexão estabelecida com ${ip}.`,
-          `Verificação de firewall para ${ip}.`,
-          `Tentativa de acesso não autorizado de ${ip}.`,
-          `Atividade suspeita detectada de ${ip}.`,
-          `Varredura de rede iniciada por ${ip}.`,
-          `Múltiplas requisições anômalas de ${ip}.`
-        ];
-        const randomMsg = messages[Math.floor(Math.random() * messages.length)];
-        
-        // Se o mesmo IP aparecer muitas vezes, simula bloqueio
-        if (ipFrequencia[ip] > 3 && (randomMsg.includes('não autorizado') || randomMsg.includes('suspeita') || randomMsg.includes('anômalas'))) {
-          addLog(`IP ${ip} BANIDO por comportamento suspeito.`, 'ALERT');
-          ipFrequencia[ip] = 0;
-        } else {
-          if (randomMsg.includes('não autorizado') || randomMsg.includes('suspeita') || randomMsg.includes('anômalas')) {
-            addLog(randomMsg, 'ALERT');
+    function startLogs() {
+      function scheduleLog() {
+        // Random delay between 30 and 60 seconds (30000 to 60000 ms)
+        const randomDelay = Math.floor(Math.random() * (60000 - 30000 + 1)) + 1000;
+        logTimeout = setTimeout(() => {
+          const ip = generateIP();
+          // Update IP frequency
+          ipFrequency[ip] = (ipFrequency[ip] || 0) + 1;
+          
+          const messages = [
+            `Connection established with ${ip}.`,
+            `Firewall check for ${ip}.`,
+            `Unauthorized access attempt from ${ip}.`,
+            `Suspicious activity detected from ${ip}.`,
+            `Network scan initiated by ${ip}.`,
+            `Multiple anomalous requests from ${ip}.`
+          ];
+          const randomMsg = messages[Math.floor(Math.random() * messages.length)];
+          
+          // Ban IP if it appears too many times with suspicious messages
+          if (
+            ipFrequency[ip] > 3 &&
+            (randomMsg.includes('Unauthorized') ||
+             randomMsg.includes('Suspicious') ||
+             randomMsg.includes('anomalous'))
+          ) {
+            addLog(`IP ${ip} banned for suspicious behavior.`, 'ALERT');
+            ipFrequency[ip] = 0;
           } else {
-            addLog(randomMsg, 'INFO');
+            if (
+              randomMsg.includes('Unauthorized') ||
+              randomMsg.includes('Suspicious') ||
+              randomMsg.includes('anomalous')
+            ) {
+              addLog(randomMsg, 'ALERT');
+            } else {
+              addLog(randomMsg, 'INFO');
+            }
           }
-        }
-      }, 800);
+          
+          // Schedule next log after random delay
+          scheduleLog();
+        }, randomDelay);
+      }
+      scheduleLog();
     }
     
-    // ======= Função de Defesa (Escudo Pulsante) =======
-    function ativarDefesa() {
-      clearInterval(logInterval);
+    // ======= Defense Function (Pulsing Shield) =======
+    function activateDefense() {
+      clearTimeout(logTimeout);
       attackActive = false;
-      addLog('Defesa ativada: pacotes maliciosos neutralizados e tráfego estabilizado.', 'INFO');
+      addLog('Defense activated: malicious packets neutralized and traffic stabilized.', 'INFO');
       
-      // Efeito visual do escudo
+      // Visual shield effect
       shieldOverlay.style.animation = 'pulseShield 1.5s ease-out';
       shieldOverlay.style.opacity = 1;
       setTimeout(() => {
         shieldOverlay.style.opacity = 0;
       }, 1500);
       
-      // Neutraliza partículas maliciosas
+      // Neutralize malicious particles
       particles.forEach(p => {
         if (p.attack) p.attack = false;
       });
       
-      // Reseta gradualmente o medidor de ameaça
+      // Gradually reset threat meter
       const resetThreat = setInterval(() => {
         threatLevel *= 0.95;
         if (threatLevel < 1) {
@@ -314,38 +382,38 @@
         }
       }, 500);
       
-      // Efeito de fundo no log
+      // Log panel background effect
       logPanel.style.transition = 'background-color 0.5s';
       logPanel.style.backgroundColor = '#003300';
       setTimeout(() => {
-        logPanel.style.backgroundColor = '#111';
+        logPanel.style.backgroundColor = '#1a1a1a';
       }, 600);
       
-      // Resetar simulação após intervalo aleatório entre 30 e 60 segundos
-      const intervaloReset = Math.floor(Math.random() * 30000) + 30000; // entre 30 e 60 segundos
-      setTimeout(resetarSimulacao, intervaloReset);
+      // Reset simulation after a random interval between 30 and 60 seconds
+      const resetInterval = Math.floor(Math.random() * 30000) + 1000;
+      setTimeout(resetSimulation, resetInterval);
     }
     
-    // ======= Função de Reset da Simulação =======
-    function resetarSimulacao() {
-      clearInterval(logInterval);
+    // ======= Simulation Reset Function =======
+    function resetSimulation() {
+      clearTimeout(logTimeout);
       threatLevel = 0;
       threatHistory = [];
-      ipFrequencia = {};
+      ipFrequency = {};
       
-      // Não adiciona log de reinicialização da simulação
+      // Restart simulation without a reset log message
       attackActive = true;
-      inicializarParticulas();
-      iniciarLogs();
+      initParticles();
+      startLogs();
     }
     
-    // ======= Inicialização e Atualizações =======
-    inicializarParticulas();
+    // ======= Initialization and Updates =======
+    initParticles();
     updateCanvas();
-    iniciarLogs();
-    chartInterval = setInterval(atualizarHistorico, 500);
+    startLogs();
+    chartInterval = setInterval(updateHistory, 500);
     
-    // Ajusta o canvas e o gráfico ao redimensionar a janela
+    // Adjust canvas and chart on window resize
     window.addEventListener('resize', () => {
       width = canvas.width = canvas.offsetWidth;
       height = canvas.height = canvas.offsetHeight;
@@ -353,14 +421,14 @@
       chartHeight = chartCanvas.height = chartCanvas.offsetHeight;
     });
     
-    // ======= Evento para a entrada do comando =======
+    // ======= Command Input Event =======
     commandInput.addEventListener('keypress', function(event) {
       if (event.key === 'Enter') {
         const command = commandInput.value.trim().toLowerCase();
-        if (command === 'ativar defesa') {
-          ativarDefesa();
+        if (command === 'activate defense') {
+          activateDefense();
         } else {
-          addLog(`Comando desconhecido: ${command}`, 'ALERT');
+          addLog(`Unknown command: ${command}`, 'ALERT');
         }
         commandInput.value = '';
       }
